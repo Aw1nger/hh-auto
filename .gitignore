@@ -1,0 +1,31 @@
+# секреты и локальные данные
+.env
+.env.local
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# зависимости / сборка
+node_modules/
+bun.lockb
+dist/
+coverage/
+
+# playwright
+playwright-report/
+test-results/
+
+# python-версия (на случай, если осталась локально)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# логи и мусор ОС
+logs/
+*.log
+.DS_Store
+.idea/
+.vscode/

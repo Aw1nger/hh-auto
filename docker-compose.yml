@@ -1,0 +1,10 @@
+services:
+  hh-autoresponder:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    # Playwright/Chromium в контейнере требует shared memory.
+    shm_size: "1gb"
