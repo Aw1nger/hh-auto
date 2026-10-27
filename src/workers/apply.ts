@@ -197,13 +197,22 @@ function notifyGlobalError(ctx: AppContext, error: string, vacancy: Vacancy): vo
     no_resume_id:
       "📄 <b>В аккаунте hh.ru не найдено резюме.</b>\nОпубликуй резюме на hh.ru и повтори.",
     captcha_failed:
-      "🔐 <b>Капча hh.ru не решена.</b>\nЦикл откликов остановлен, чтобы не долбить hh. " +
-      "Проверь, что бот может присылать капчу в Telegram, и попробуй снова.",
+      "🔐 <b>Капча hh.ru не решена.</b>\n" +
+      "Цикл откликов остановлен, чтобы не долбить hh.",
   };
   const text = messages[error];
-  if (text) {
-    void ctx.notifier.send(`${text}\n\nВакансия: ${escapeHtml(truncate(vacancy.title, 70))}`);
+  if (!text) return;
+
+  const message = `${text}\n\nВакансия: ${escapeHtml(truncate(vacancy.title, 70))}`;
+  if (error === "captcha_failed" && ctx.state.autoApplyPaused) {
+    void ctx.notifier.sendWithButton(
+      `${message}\n\nАвтоотклики приостановлены. Нажми кнопку ниже, чтобы продолжить.`,
+      "▶️ Продолжить автоотклики",
+      "resume_auto_apply",
+    );
+    return;
   }
+  void ctx.notifier.send(message);
 }
 
 /** Ручной отклик из карточки вакансии (кнопка «Откликнуться»). */
@@ -321,6 +330,9 @@ async function runAutoApplyInner(
         reason: step.error,
         vacancyId: vacancy.id,
       });
+      if (step.error === "captcha_failed") {
+        ctx.state.pauseAutoApply("captcha_failed");
+      }
       notifyGlobalError(ctx, step.error ?? "", vacancy);
       break;
     }

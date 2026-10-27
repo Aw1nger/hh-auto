@@ -23,6 +23,11 @@ export interface CaptchaImagePrompt {
 
 export type SendText = (text: string) => Promise<unknown>;
 export type SendCaptchaImage = (prompt: CaptchaImagePrompt) => Promise<unknown>;
+export type SendTextWithButton = (
+  text: string,
+  buttonText: string,
+  callbackData: string,
+) => Promise<unknown>;
 
 interface PendingCaptcha {
   resolve: (answer: string | null) => void;
@@ -33,6 +38,7 @@ interface PendingCaptcha {
 export class Notifier {
   private sendText: SendText | null = null;
   private sendCaptchaImage: SendCaptchaImage | null = null;
+  private sendTextWithButton: SendTextWithButton | null = null;
   private verbose = true;
   private pending: PendingCaptcha | null = null;
   private readonly captchaMutex = new Mutex();
@@ -41,11 +47,13 @@ export class Notifier {
   configure(options: {
     sendText: SendText;
     sendCaptchaImage?: SendCaptchaImage;
+    sendTextWithButton?: SendTextWithButton;
     verbose?: boolean;
     fallbackDir?: string;
   }): void {
     this.sendText = options.sendText;
     if (options.sendCaptchaImage) this.sendCaptchaImage = options.sendCaptchaImage;
+    if (options.sendTextWithButton) this.sendTextWithButton = options.sendTextWithButton;
     if (options.verbose !== undefined) this.verbose = options.verbose;
     if (options.fallbackDir) this.fallbackDir = options.fallbackDir;
   }
@@ -66,6 +74,26 @@ export class Notifier {
     } catch (error) {
       log.warn("telegram_send_failed", { error: error instanceof Error ? error.message : error });
     }
+  }
+
+  /** Сообщение с одной inline-кнопкой. */
+  async sendWithButton(
+    text: string,
+    buttonText: string,
+    callbackData: string,
+  ): Promise<void> {
+    if (this.sendTextWithButton) {
+      try {
+        await this.sendTextWithButton(text, buttonText, callbackData);
+        return;
+      } catch (error) {
+        log.warn("telegram_button_send_failed", {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
+    // Если кнопка недоступна — хотя бы текст.
+    await this.send(text);
   }
 
   /** Подробный лог действия — только в verbose-режиме. */

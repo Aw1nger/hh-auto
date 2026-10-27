@@ -20,6 +20,10 @@ export interface Config {
   hhLogin: string;
   hhPassword: string;
   hhResumeId: string;
+  /** User-Agent для API hh.ru. Если пуст — генерируется официальный Android. */
+  hhUserAgent: string;
+  /** На какой UA переключиться, если HH просит капчу на пользовательский UA. */
+  hhUserAgentFallback: string;
 
   // Профиль
   desiredPosition: string;
@@ -148,6 +152,8 @@ export function loadConfig(envMap: NodeJS.ProcessEnv = process.env): Config {
     hhLogin: env(envMap, "HH_LOGIN"),
     hhPassword: env(envMap, "HH_PASSWORD"),
     hhResumeId: env(envMap, "HH_RESUME_ID"),
+    hhUserAgent: env(envMap, "HH_USER_AGENT"),
+    hhUserAgentFallback: env(envMap, "HH_USER_AGENT_FALLBACK"),
 
     desiredPosition,
     desiredSalaryMin: intEnv(envMap, "DESIRED_SALARY_MIN", 150_000),

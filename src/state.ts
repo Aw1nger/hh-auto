@@ -21,6 +21,9 @@ export interface SchedulerStateData {
   manual_paused_platforms: string[];
   last_login_alert: Record<string, string>;
   last_apply_summary_at?: string;
+  /** Причина автоматической паузы автооткликов (например, captcha_failed). */
+  auto_apply_paused_reason?: string;
+  auto_apply_paused_at?: string;
 }
 
 const DEFAULTS: SchedulerStateData = {
@@ -94,7 +97,35 @@ export class SchedulerState {
 
   setAutoApply(value: boolean): void {
     this.data.auto_apply = value;
+    // Ручное переключение автооткликов снимает автоматическую паузу.
+    delete this.data.auto_apply_paused_reason;
+    delete this.data.auto_apply_paused_at;
     this.save();
+  }
+
+  get autoApplyPaused(): boolean {
+    return Boolean(this.data.auto_apply_paused_reason);
+  }
+
+  get autoApplyPausedReason(): string | undefined {
+    return this.data.auto_apply_paused_reason;
+  }
+
+  /** Автоматически приостановить автоотклики (капча, ошибка и т.п.). */
+  pauseAutoApply(reason: string): void {
+    this.data.auto_apply_paused_reason = reason;
+    this.data.auto_apply_paused_at = new Date().toISOString();
+    this.save();
+    log.warn("auto_apply_paused", { reason });
+  }
+
+  /** Снять автоматическую паузу и включить автоотклики. */
+  resumeAutoApply(): void {
+    this.data.auto_apply = true;
+    delete this.data.auto_apply_paused_reason;
+    delete this.data.auto_apply_paused_at;
+    this.save();
+    log.info("auto_apply_resumed");
   }
 
   get passTests(): boolean {

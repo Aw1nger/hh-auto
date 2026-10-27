@@ -18,8 +18,12 @@ export function mainMenu(): Keyboard {
     .persistent();
 }
 
-export function settingsKeyboard(isPaused: boolean, autoApply: boolean): InlineKeyboard {
-  return new InlineKeyboard()
+export function settingsKeyboard(
+  isPaused: boolean,
+  autoApply: boolean,
+  autoApplyPaused = false,
+): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
     .text(isPaused ? "▶️ Возобновить" : "⏸ Пауза", "toggle_pause")
     .text(autoApply ? "🟢 Авто-отклик ВКЛ" : "⚪ Авто-отклик ВЫКЛ", "toggle_auto")
     .row()
@@ -31,6 +35,11 @@ export function settingsKeyboard(isPaused: boolean, autoApply: boolean): InlineK
     .row()
     .text("🔐 Войти на hh", "login_start")
     .text("📊 Статистика", "show_stats");
+
+  if (autoApplyPaused) {
+    keyboard.row().text("▶️ Продолжить автоотклики", "resume_auto_apply");
+  }
+  return keyboard;
 }
 
 export function vacancyListKeyboard(

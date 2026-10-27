@@ -148,6 +148,18 @@ export class WorkerScheduler {
     return this.ctx.state.autoApply;
   }
 
+  get autoApplyPaused(): boolean {
+    return this.ctx.state.autoApplyPaused;
+  }
+
+  get autoApplyPausedReason(): string | undefined {
+    return this.ctx.state.autoApplyPausedReason;
+  }
+
+  resumeAutoApply(): void {
+    this.ctx.state.resumeAutoApply();
+  }
+
   pause(): void {
     this.ctx.state.setPaused(true);
     log.info("scheduler_paused");
@@ -204,7 +216,13 @@ export class WorkerScheduler {
   }
 
   private async jobApply(): Promise<void> {
-    if (this.ctx.state.isPaused || !this.ctx.state.autoApply) return;
+    if (
+      this.ctx.state.isPaused ||
+      !this.ctx.state.autoApply ||
+      this.ctx.state.autoApplyPaused
+    ) {
+      return;
+    }
     await runAutoApply(this.ctx);
   }
 

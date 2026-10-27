@@ -17,12 +17,6 @@ coverage/
 playwright-report/
 test-results/
 
-# python-версия (на случай, если осталась локально)
-.venv/
-venv/
-__pycache__/
-*.pyc
-
 # логи и мусор ОС
 logs/
 *.log

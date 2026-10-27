@@ -217,7 +217,9 @@ export class HHOAuthClient {
   private readonly fetchImpl: typeof fetch;
   private token: StoredToken | null = null;
   private tokenLoaded = false;
-  private readonly apiUserAgent = generateHHApiUserAgent();
+  private apiUserAgent: string;
+  private readonly fallbackUserAgent: string;
+  private uaFallbackUsed = false;
 
   constructor(options: HHOAuthOptions) {
     this.config = options.config;
@@ -226,6 +228,8 @@ export class HHOAuthClient {
     this.browserCaptcha = options.browserCaptcha;
     this.tokenPath = options.tokenPath ?? options.config.hhTokenPath;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.apiUserAgent = options.config.hhUserAgent || generateHHApiUserAgent();
+    this.fallbackUserAgent = options.config.hhUserAgentFallback || generateHHApiUserAgent();
   }
 
   // ── Токены ─────────────────────────────────────────────────────────────
@@ -465,9 +469,10 @@ export class HHOAuthClient {
 
     for (;;) {
       const headers = new Headers(init.headers);
-      headers.set("User-Agent", options.ua ?? this.apiUserAgent);
       headers.set("Accept", "application/json");
-      if (!options.ua) {
+      const userAgent = options.ua ?? this.apiUserAgent;
+      headers.set("User-Agent", userAgent);
+      if (!options.ua && /^ru\.hh\.android\//.test(userAgent)) {
         headers.set("X-Force-App-Access", "true");
         headers.set("X-HH-App-Active", "true");
       }
@@ -523,6 +528,23 @@ export class HHOAuthClient {
       // но только если мы сами ещё не просили её в этом запросе.
       if (!askedInThisRequest && !skippedRecentSolve && this.captcha.wasRecentlySolved(60_000)) {
         skippedRecentSolve = true;
+        await sleep(1000);
+        continue;
+      }
+
+      // Если hh не нравится пользовательский UA (например, iPhone Safari),
+      // один раз пробуем официальный Android UA без дергания пользователя.
+      if (
+        !this.uaFallbackUsed &&
+        this.config.hhUserAgent &&
+        this.apiUserAgent !== this.fallbackUserAgent
+      ) {
+        log.warn("hh_ua_captcha_fallback", {
+          from: this.apiUserAgent,
+          to: this.fallbackUserAgent,
+        });
+        this.apiUserAgent = this.fallbackUserAgent;
+        this.uaFallbackUsed = true;
         await sleep(1000);
         continue;
       }

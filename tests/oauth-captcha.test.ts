@@ -6,12 +6,13 @@ import { generateHHApiUserAgent, HHOAuthClient } from "../src/hh/oauth";
 
 const tokenPaths: string[] = [];
 
-function makeConfig(tokenPath: string) {
+function makeConfig(tokenPath: string, extra: Record<string, string> = {}) {
   return loadConfig({
     HH_RESUME_ID: "resume-hash",
     HH_TOKEN_PATH: tokenPath,
     CAPTCHA_SUBMIT_DELAY_SEC: "0",
     CAPTCHA_COOLDOWN_SEC: "0",
+    ...extra,
   } as NodeJS.ProcessEnv);
 }
 
@@ -155,5 +156,43 @@ describe("oauth apply + captcha", () => {
     expect(outcome.result).toBe(true);
     expect(solveCalls).toBe(1);
     expect(directCalls).toBe(2);
+  });
+
+  it("uses HH_USER_AGENT and switches to the fallback UA on captcha", async () => {
+    const tokenPath = `/tmp/hh-oauth-test-${Date.now()}-4.json`;
+    makeToken(tokenPath);
+    const config = makeConfig(tokenPath, {
+      HH_USER_AGENT: "iPhone-Test-UA",
+      HH_USER_AGENT_FALLBACK: "Android-Fallback-UA",
+    });
+    const seenUas: string[] = [];
+    let calls = 0;
+
+    const client = new HHOAuthClient({
+      config,
+      captcha: {
+        solve: async () => ({ solved: false, attempts: 1 }),
+        wasRecentlySolved: () => false,
+        markSolved: () => undefined,
+      } as never,
+      browser: { isAvailable: () => false } as never,
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        calls += 1;
+        const headers = new Headers(init.headers);
+        seenUas.push(headers.get("user-agent") ?? "");
+        if (calls === 1) {
+          return new Response(CAPTCHA_BODY, {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response("", { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+
+    const outcome = await client.apply("12345", "Здравствуйте!");
+    expect(outcome.result).toBe(true);
+    expect(seenUas[0]).toBe("iPhone-Test-UA");
+    expect(seenUas[1]).toBe("Android-Fallback-UA");
   });
 });

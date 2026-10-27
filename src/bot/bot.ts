@@ -2,7 +2,7 @@
  * Telegram-бот: меню, статистика, вакансии, настройки и — главное —
  * приём ответа на капчу hh.ru.
  */
-import { Bot, InputFile, type Context } from "grammy";
+import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
 
 import type { AppContext } from "../context";
 import { log } from "../logger";
@@ -110,6 +110,13 @@ export function createBot(app: AppContext, scheduler: WorkerScheduler): Bot {
           reply_markup: keyboard,
         });
       }
+    },
+    sendTextWithButton: async (text, buttonText, callbackData) => {
+      await bot.api.sendMessage(chatId, text, {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+        reply_markup: new InlineKeyboard().text(buttonText, callbackData),
+      });
     },
     fallbackDir: `${app.config.dataDir}/captcha`,
   });
@@ -426,6 +433,15 @@ export function createBot(app: AppContext, scheduler: WorkerScheduler): Bot {
       text: scheduler.autoApply ? "🟢 Авто-отклик ВКЛ" : "⚪ Авто-отклик ВЫКЛ",
     });
     await safeEdit(ctx, app, scheduler);
+  });
+
+  bot.callbackQuery("resume_auto_apply", async (ctx) => {
+    scheduler.resumeAutoApply();
+    await ctx.answerCallbackQuery({ text: "▶️ Автоотклики возобновлены" });
+    await ctx.reply(
+      "▶️ <b>Автоотклики возобновлены.</b> Следующий цикл — по расписанию.",
+      { parse_mode: "HTML" },
+    );
   });
 
   bot.callbackQuery("force_search", async (ctx) => {
@@ -854,7 +870,11 @@ async function sendSettings(
 ): Promise<void> {
   await ctx.reply(settingsText(app, scheduler), {
     parse_mode: "HTML",
-    reply_markup: settingsKeyboard(scheduler.isPaused, scheduler.autoApply),
+    reply_markup: settingsKeyboard(
+      scheduler.isPaused,
+      scheduler.autoApply,
+      scheduler.autoApplyPaused,
+    ),
   });
 }
 
@@ -877,7 +897,13 @@ function settingsText(app: AppContext, scheduler: WorkerScheduler): string {
     `${flagLine("notify_messages", "Сообщать о рекрутёрах")}\n` +
     `${flagLine("thank_rejections", "Благодарить за отказ")}\n` +
     `${flagLine("bump_resume", "Поднимать резюме")}\n\n` +
-    `${scheduler.isPaused ? "⏸ Пауза" : "▶️ Работает"}`
+    `${
+      scheduler.autoApplyPaused
+        ? "⏸ Автоотклики приостановлены: капча не решена. Нажми «Продолжить автоотклики»."
+        : scheduler.isPaused
+          ? "⏸ Пауза"
+          : "▶️ Работает"
+    }`
   );
 }
 
@@ -887,7 +913,11 @@ async function safeEdit(
   scheduler: WorkerScheduler,
 ): Promise<void> {
   const text = settingsText(app, scheduler);
-  const keyboard = settingsKeyboard(scheduler.isPaused, scheduler.autoApply);
+  const keyboard = settingsKeyboard(
+    scheduler.isPaused,
+    scheduler.autoApply,
+    scheduler.autoApplyPaused,
+  );
   await ctx
     .editMessageText(text, { parse_mode: "HTML", reply_markup: keyboard })
     .catch(async () => {

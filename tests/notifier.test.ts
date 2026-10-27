@@ -71,4 +71,25 @@ describe("notifier captcha flow", () => {
     );
     await expect(promise).resolves.toBeNull();
   });
+
+  it("sends a message with an inline action button", async () => {
+    const notifier = new Notifier();
+    const calls: Array<{ text: string; button: string; data: string }> = [];
+    notifier.configure({
+      sendText: async () => undefined,
+      sendTextWithButton: async (text, button, data) => {
+        calls.push({ text, button, data });
+      },
+      verbose: false,
+    });
+
+    await notifier.sendWithButton("Автоотклики на паузе", "Продолжить", "resume_auto_apply");
+    expect(calls).toEqual([
+      {
+        text: "Автоотклики на паузе",
+        button: "Продолжить",
+        data: "resume_auto_apply",
+      },
+    ]);
+  });
 });

@@ -126,6 +126,15 @@ async function main(): Promise<void> {
       "Управление — /start. Капча hh.ru будет приходить сюда.",
   );
 
+  if (state.autoApplyPaused) {
+    await notifier.sendWithButton(
+      "⏸ <b>Автоотклики приостановлены после ошибки капчи.</b>\n\n" +
+        "Нажми кнопку ниже, чтобы продолжить.",
+      "▶️ Продолжить автоотклики",
+      "resume_auto_apply",
+    );
+  }
+
   if (config.dryRun) {
     await notifier.send("🧪 Режим DRY_RUN: отклики не отправляются.");
   }
