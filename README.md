@@ -45,8 +45,8 @@ Telegram-бот автооткликов на **hh.ru**. Ищет ваканси
 ## Установка
 
 ```bash
-git clone https://github.com/YAMAKAYAMACO/hh-autoresponder.git
-cd hh-autoresponder
+git clone git@github.com:Aw1nger/hh-auto.git
+cd hh-auto
 
 bun install
 bunx playwright install chromium
