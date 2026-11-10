@@ -315,6 +315,27 @@ export class Store {
         // Таблица companies может не существовать до createSchema
       }
 
+      // Проверяем наличие и дефолт колонок is_read и is_forwarded в recruiter_messages
+      try {
+        const msgColumns = this.db
+          .query("PRAGMA table_info(recruiter_messages)")
+          .all() as Array<{ name: string }>;
+        const hasIsRead = msgColumns.some((col) => col.name === "is_read");
+        if (!hasIsRead) {
+          this.db.exec("ALTER TABLE recruiter_messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0");
+        } else {
+          this.db.exec("UPDATE recruiter_messages SET is_read = 0 WHERE is_read IS NULL");
+        }
+        const hasIsForwarded = msgColumns.some((col) => col.name === "is_forwarded");
+        if (!hasIsForwarded) {
+          this.db.exec("ALTER TABLE recruiter_messages ADD COLUMN is_forwarded INTEGER NOT NULL DEFAULT 0");
+        } else {
+          this.db.exec("UPDATE recruiter_messages SET is_forwarded = 0 WHERE is_forwarded IS NULL");
+        }
+      } catch {
+        // Таблица recruiter_messages может не существовать до createSchema
+      }
+
       log.info("legacy_data_migrated");
     } catch (error) {
       log.warn("legacy_migration_skipped", {
@@ -675,8 +696,8 @@ export class Store {
     const result = this.db
       .query(
         `INSERT INTO recruiter_messages
-         (vacancy_id, platform, sender_name, sender_company, text, external_thread_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (vacancy_id, platform, sender_name, sender_company, text, is_read, is_forwarded, external_thread_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
       )
       .run(
         vacancyId,

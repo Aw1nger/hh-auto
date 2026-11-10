@@ -23,9 +23,8 @@ async function main(): Promise<void> {
   const botConfigured = errors.length === 0;
 
   if (!botConfigured) {
-    console.warn("⚠️ Не хватает настроек для Telegram-бота:\n" + errors.map((error) => `  • ${error}`).join("\n"));
+    console.warn("Не хватает настроек:\n" + errors.map((error) => `  • ${error}`).join("\n"));
     console.warn("Скопируй .env.example в .env и заполни TG_BOT_TOKEN и TG_ADMIN_CHAT_ID.");
-    console.warn("Панель управления hh-auto запускается на порту 3000...");
   }
 
   log.info("starting_hh_autoresponder", {
@@ -72,7 +71,6 @@ async function main(): Promise<void> {
 
   const scheduler = new WorkerScheduler(ctx);
 
-  // Запуск веб-сервера панели управления на порту 3000
   const server = startDashboardServer({
     ctx,
     scheduler,
@@ -95,8 +93,8 @@ async function main(): Promise<void> {
     try {
       server.close();
       await scheduler.stop().catch(() => undefined);
-      log.info("shutdown_step", { step: "bot" });
       if (bot) {
+        log.info("shutdown_step", { step: "bot" });
         const botStop = bot.stop().catch(() => undefined);
         await Promise.race([
           botStop,
@@ -128,7 +126,6 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => onSignal("SIGTERM"));
 
   if (!botConfigured) {
-    log.info("running_in_dashboard_mode_waiting_config");
     await shutdownDone;
     return;
   }

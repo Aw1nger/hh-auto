@@ -137,4 +137,41 @@ describe("sqlite store", () => {
     expect(inserted).toBe(1);
     store.close();
   });
+
+  it("handles recruiter_messages table with strict NOT NULL on is_read and is_forwarded", () => {
+    const path = `/tmp/hh-auto-legacy-msg-${Date.now()}-${Math.random().toString(16).slice(2)}.db`;
+    paths.push(path);
+    const { Database } = require("bun:sqlite");
+    const rawDb = new Database(path, { create: true });
+    rawDb.exec(`
+      CREATE TABLE recruiter_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vacancy_id INTEGER,
+        platform TEXT NOT NULL,
+        sender_name TEXT,
+        sender_company TEXT,
+        text TEXT NOT NULL,
+        is_read INTEGER NOT NULL,
+        is_forwarded INTEGER NOT NULL,
+        external_thread_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    rawDb.close();
+
+    const store = new Store(path);
+    const msg = store.addMessageIfNew({
+      platform: "hh",
+      company: "ООО Спец",
+      sender: "Анна",
+      text: "Приглашаем на собеседование",
+      threadId: "thread_123",
+    });
+    expect(msg).not.toBeNull();
+    expect(msg?.text).toBe("Приглашаем на собеседование");
+    expect(msg?.isRead).toBe(false);
+    store.close();
+  });
 });
+

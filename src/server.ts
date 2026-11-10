@@ -156,7 +156,7 @@ export function startDashboardServer(options: ServerOptions) {
 
   server.listen(port, host, () => {
     log.info("dashboard_server_listening", { port, host });
-    console.log(`🌐 Панель управления hh-auto доступна на http://${host}:${port}`);
+    console.log(`🌐 Панель управления hh-auto запущена на http://${host}:${port}`);
   });
 
   return server;
@@ -254,8 +254,8 @@ function renderDashboardHtml(
     ${
       !botConfigured
         ? `<div class="alert-box">
-          <b>ℹ️ Бот готов к работе в режиме дашборда.</b><br />
-          Для запуска Telegram-бота и фоновых автооткликов укажите <code>TG_BOT_TOKEN</code> и <code>TG_ADMIN_CHAT_ID</code> в файле <code>.env</code>. Вы также можете вручную вызывать поиск и анализ через кнопки ниже.
+          <b>ℹ️ Бот ожидает настройки:</b><br />
+          Укажите <code>TG_BOT_TOKEN</code> и <code>TG_ADMIN_CHAT_ID</code> в <code>.env</code> для запуска Telegram-бота.
         </div>`
         : ""
     }
