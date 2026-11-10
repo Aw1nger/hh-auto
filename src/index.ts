@@ -13,21 +13,25 @@ import { log, setLogLevel } from "./logger";
 import { notifier } from "./notifier";
 import { WorkerScheduler } from "./scheduler";
 import { SchedulerState } from "./state";
+import { startDashboardServer } from "./server";
 
 async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.logLevel);
 
   const errors = validateForBot(config);
-  if (errors.length > 0) {
-    console.error("Не хватает настроек:\n" + errors.map((error) => `  • ${error}`).join("\n"));
-    console.error("Скопируй .env.example в .env и заполни TG_BOT_TOKEN и TG_ADMIN_CHAT_ID.");
-    process.exit(1);
+  const botConfigured = errors.length === 0;
+
+  if (!botConfigured) {
+    console.warn("⚠️ Не хватает настроек для Telegram-бота:\n" + errors.map((error) => `  • ${error}`).join("\n"));
+    console.warn("Скопируй .env.example в .env и заполни TG_BOT_TOKEN и TG_ADMIN_CHAT_ID.");
+    console.warn("Панель управления hh-auto запускается на порту 3000...");
   }
 
   log.info("starting_hh_autoresponder", {
     dryRun: config.dryRun,
     captcha: config.captchaEnabled,
+    botConfigured,
   });
 
   const db = new Store(config.databasePath);
@@ -67,7 +71,13 @@ async function main(): Promise<void> {
   };
 
   const scheduler = new WorkerScheduler(ctx);
-  const bot = createBot(ctx, scheduler);
+
+  // Запуск веб-сервера панели управления на порту 3000
+  const server = startDashboardServer({
+    ctx,
+    scheduler,
+    botConfigured,
+  });
 
   let shuttingDown = false;
   let resolveShutdown!: () => void;
@@ -75,32 +85,33 @@ async function main(): Promise<void> {
     resolveShutdown = resolve;
   });
 
+  let bot: ReturnType<typeof createBot> | undefined;
+
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return shutdownDone;
     shuttingDown = true;
     log.info("shutting_down", { signal });
-    // Держим event loop живым, пока идёт асинхронная очистка: иначе Bun
-    // может выйти сразу после остановки polling, не закрыв браузер и БД.
     const keepAlive = setInterval(() => undefined, 1000);
     try {
+      server.close();
       await scheduler.stop().catch(() => undefined);
       log.info("shutdown_step", { step: "bot" });
-      // bot.stop() может ждать завершения long-polling; не блокируем им
-      // закрытие браузера и БД.
-      const botStop = bot.stop().catch(() => undefined);
+      if (bot) {
+        const botStop = bot.stop().catch(() => undefined);
+        await Promise.race([
+          botStop,
+          new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 2000);
+            timer.unref?.();
+          }),
+        ]);
+      }
       log.info("shutdown_step", { step: "playwright" });
       await dropAllLoginSessions().catch(() => undefined);
       await playwright.close().catch(() => undefined);
       log.info("shutdown_step", { step: "browser" });
       await browser.close().catch(() => undefined);
       db.close();
-      await Promise.race([
-        botStop,
-        new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 2000);
-          timer.unref?.();
-        }),
-      ]);
       log.info("stopped");
     } finally {
       clearInterval(keepAlive);
@@ -109,7 +120,6 @@ async function main(): Promise<void> {
   };
 
   const onSignal = (signal: string): void => {
-    // Страховка: если какой-то сетевой вызов завис, не висим вечно.
     const hardExit = setTimeout(() => process.exit(0), 15_000);
     hardExit.unref?.();
     void shutdown(signal);
@@ -117,6 +127,13 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => onSignal("SIGINT"));
   process.on("SIGTERM", () => onSignal("SIGTERM"));
 
+  if (!botConfigured) {
+    log.info("running_in_dashboard_mode_waiting_config");
+    await shutdownDone;
+    return;
+  }
+
+  bot = createBot(ctx, scheduler);
   scheduler.start();
 
   await notifier.send(
@@ -148,8 +165,6 @@ async function main(): Promise<void> {
 
   try {
     await startBot(bot);
-    // bot.stop() (например, по SIGINT) завершает polling; дожидаемся
-    // полной очистки, иначе Bun может выйти раньше закрытия браузера/БД.
     await shutdownDone;
   } catch (error) {
     log.error("bot_fatal", {

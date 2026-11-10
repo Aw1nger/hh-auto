@@ -299,6 +299,22 @@ export class Store {
           // Таблицы может не быть в старой схеме — не критично.
         }
       }
+
+      // Проверяем наличие и дефолт колонки is_blacklisted в companies
+      try {
+        const columns = this.db
+          .query("PRAGMA table_info(companies)")
+          .all() as Array<{ name: string }>;
+        const hasBlacklisted = columns.some((col) => col.name === "is_blacklisted");
+        if (!hasBlacklisted) {
+          this.db.exec("ALTER TABLE companies ADD COLUMN is_blacklisted INTEGER NOT NULL DEFAULT 0");
+        } else {
+          this.db.exec("UPDATE companies SET is_blacklisted = 0 WHERE is_blacklisted IS NULL");
+        }
+      } catch {
+        // Таблица companies может не существовать до createSchema
+      }
+
       log.info("legacy_data_migrated");
     } catch (error) {
       log.warn("legacy_migration_skipped", {
@@ -362,65 +378,72 @@ export class Store {
       "SELECT id, is_blacklisted FROM companies WHERE name = ? AND platform = ? LIMIT 1",
     );
     const insertCompany = this.db.query(
-      "INSERT INTO companies (name, url, platform, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO companies (name, url, platform, is_blacklisted, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
     );
 
     let saved = 0;
     const tx = this.db.transaction(() => {
       for (const vacancy of parsed) {
-        const title = (vacancy.title ?? "").trim();
-        const externalId = String(vacancy.externalId ?? "").trim();
-        const url = (vacancy.url ?? "").trim();
-        if (!title || !externalId || !url) continue;
+        try {
+          const title = (vacancy.title ?? "").trim();
+          const externalId = String(vacancy.externalId ?? "").trim();
+          const url = (vacancy.url ?? "").trim();
+          if (!title || !externalId || !url) continue;
 
-        const titleLower = title.toLowerCase();
-        const companyLower = (vacancy.companyName ?? "").toLowerCase();
-        if (companyLower && blacklist.company.has(companyLower)) continue;
-        if (blacklist.vacancy.has(externalId)) continue;
-        if ([...blacklist.keyword].some((keyword) => titleLower.includes(keyword))) continue;
+          const titleLower = title.toLowerCase();
+          const companyLower = (vacancy.companyName ?? "").toLowerCase();
+          if (companyLower && blacklist.company.has(companyLower)) continue;
+          if (blacklist.vacancy.has(externalId)) continue;
+          if ([...blacklist.keyword].some((keyword) => titleLower.includes(keyword))) continue;
 
-        let companyId: number | null = null;
-        if (vacancy.companyName) {
-          const existing = findCompany.get(vacancy.companyName, vacancy.platform) as
-            | { id: number; is_blacklisted: number }
-            | undefined;
-          if (existing) {
-            if (Boolean(existing.is_blacklisted)) continue;
-            companyId = Number(existing.id);
-          } else {
-            const now = nowIso();
-            const result = insertCompany.run(
-              vacancy.companyName,
-              vacancy.companyUrl ?? null,
-              vacancy.platform,
-              now,
-              now,
-            );
-            companyId = Number(result.lastInsertRowid);
+          let companyId: number | null = null;
+          if (vacancy.companyName) {
+            const existing = findCompany.get(vacancy.companyName, vacancy.platform) as
+              | { id: number; is_blacklisted: number }
+              | undefined;
+            if (existing) {
+              if (Boolean(existing.is_blacklisted)) continue;
+              companyId = Number(existing.id);
+            } else {
+              const now = nowIso();
+              const result = insertCompany.run(
+                vacancy.companyName,
+                vacancy.companyUrl ?? null,
+                vacancy.platform,
+                now,
+                now,
+              );
+              companyId = Number(result.lastInsertRowid);
+            }
           }
-        }
 
-        const now = nowIso();
-        const result = insert.run(
-          vacancy.platform,
-          externalId,
-          url,
-          title,
-          vacancy.description ?? null,
-          vacancy.salaryFrom ?? null,
-          vacancy.salaryTo ?? null,
-          vacancy.salaryCurrency ?? null,
-          vacancy.location ?? null,
-          vacancy.isRemote ? 1 : 0,
-          null,
-          vacancy.experience ?? null,
-          vacancy.employmentType ?? null,
-          vacancy.skills?.length ? JSON.stringify(vacancy.skills) : null,
-          companyId,
-          now,
-          now,
-        );
-        if (Number(result.changes) > 0) saved += 1;
+          const now = nowIso();
+          const result = insert.run(
+            vacancy.platform,
+            externalId,
+            url,
+            title,
+            vacancy.description ?? null,
+            vacancy.salaryFrom ?? null,
+            vacancy.salaryTo ?? null,
+            vacancy.salaryCurrency ?? null,
+            vacancy.location ?? null,
+            vacancy.isRemote ? 1 : 0,
+            null,
+            vacancy.experience ?? null,
+            vacancy.employmentType ?? null,
+            vacancy.skills?.length ? JSON.stringify(vacancy.skills) : null,
+            companyId,
+            now,
+            now,
+          );
+          if (Number(result.changes) > 0) saved += 1;
+        } catch (itemError) {
+          log.warn("insert_single_vacancy_error", {
+            externalId: vacancy.externalId,
+            error: itemError instanceof Error ? itemError.message : String(itemError),
+          });
+        }
       }
     });
     tx();

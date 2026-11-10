@@ -32,7 +32,11 @@ export async function runVacancySearch(ctx: AppContext): Promise<number> {
   for (const query of ctx.config.searchQueries) {
     try {
       // remote=false — ищем всё: удалёнку, гибрид и офис.
-      const vacancies = await ctx.parser.searchVacancies(query, { remote: false });
+      // orderBy="publication_time" — сортировка по времени публикации, чтобы находить новые вакансии
+      const vacancies = await ctx.parser.searchVacancies(query, {
+        remote: false,
+        orderBy: "publication_time",
+      });
       const saved = ctx.db.insertVacancies(vacancies);
       totalNew += saved;
       log.info("search_batch_done", { query, found: vacancies.length, new: saved });

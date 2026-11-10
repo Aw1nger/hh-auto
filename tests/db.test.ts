@@ -105,4 +105,36 @@ describe("sqlite store", () => {
     expect(store.getVacancy(1)?.status).toBe("applied");
     store.close();
   });
+
+  it("handles companies table with strict NOT NULL on is_blacklisted", () => {
+    // Симулируем старую базу, где companies.is_blacklisted создан с NOT NULL без DEFAULT
+    const path = `/tmp/hh-auto-legacy-${Date.now()}-${Math.random().toString(16).slice(2)}.db`;
+    paths.push(path);
+    const { Database } = require("bun:sqlite");
+    const rawDb = new Database(path, { create: true });
+    rawDb.exec(`
+      CREATE TABLE companies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT,
+        platform TEXT NOT NULL DEFAULT 'hh',
+        platform_id TEXT,
+        description TEXT,
+        is_blacklisted INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    rawDb.close();
+
+    const store = new Store(path);
+    const testVacancy = {
+      ...vacancy,
+      externalId: "legacy-999",
+      companyName: "Новая Компания Без Дефолта",
+    };
+    const inserted = store.insertVacancies([testVacancy]);
+    expect(inserted).toBe(1);
+    store.close();
+  });
 });

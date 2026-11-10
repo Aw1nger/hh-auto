@@ -35,6 +35,7 @@ export interface SearchFilters {
   remote?: boolean;
   experience?: string;
   pages?: number;
+  orderBy?: "publication_time" | "relevance" | "salary_desc" | "salary_asc";
 }
 
 export interface ParsedSalary {
@@ -211,6 +212,7 @@ export class HHParser {
     for (let page = 0; page < pages; page += 1) {
       const params = new URLSearchParams({
         text: query,
+        order_by: filters.orderBy ?? "publication_time",
         search_field: "name",
         enable_snippets: "true",
         no_magic: "true",

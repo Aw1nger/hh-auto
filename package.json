@@ -8,6 +8,8 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
     "login": "bun run src/scripts/login.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit"
